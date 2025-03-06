@@ -8,26 +8,40 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-def extract_article_content(url: str, content: str) -> Optional[str]:
+def extract_article_content(url: str, content: str) -> Optional[Dict]:
     """
-    Extract clean article content using trafilatura
+    Extract clean article content using trafilatura with enhanced metadata
     """
     try:
         # First try using the provided content directly
         logger.debug("Attempting to extract content directly from provided text")
         if content and len(content.strip()) > 0:  # Basic check for non-empty content
             logger.debug("Using provided content directly")
-            return content.strip()
+            return {
+                "text": content.strip(),
+                "source": "direct_input",
+                "length": len(content.strip())
+            }
 
         # If no direct content, try URL-based extraction
         logger.debug(f"No direct content, attempting to extract from URL: {url}")
         downloaded = trafilatura.fetch_url(url)
         if downloaded:
-            extracted = trafilatura.extract(downloaded)
+            extracted = trafilatura.extract(downloaded, include_formatting=True, include_links=True, 
+                                         include_images=True, include_tables=True, 
+                                         output_format='json')
             if extracted:
+                extracted_dict = json.loads(extracted)
                 logger.debug("Successfully extracted content from URL")
-                logger.debug(f"Extracted content length: {len(extracted)}")
-                return extracted
+                logger.debug(f"Extracted content length: {len(extracted_dict.get('text', ''))}")
+                return {
+                    "text": extracted_dict.get('text', ''),
+                    "title": extracted_dict.get('title', ''),
+                    "author": extracted_dict.get('author', ''),
+                    "date": extracted_dict.get('date', ''),
+                    "source": url,
+                    "length": len(extracted_dict.get('text', ''))
+                }
             else:
                 logger.error("Failed to extract content from downloaded HTML")
         else:
@@ -85,13 +99,13 @@ def analyze_with_gemini(content: str) -> Dict:
         logger.error(f"Error in Gemini analysis: {str(e)}", exc_info=True)
         return None
 
-def analyze_propaganda(content: str) -> Dict:
+def analyze_propaganda(content: Dict) -> Dict:
     """
-    Enhanced propaganda analysis combining pattern matching and AI analysis
+    Enhanced propaganda analysis with detailed pattern locations and context
     """
     import re
 
-    # Expanded propaganda indicators with more sophisticated patterns
+    # Expanded propaganda indicators with more sophisticated patterns remain unchanged
     propaganda_indicators = {
         'emotional_language': r'\b(shocking|outrageous|terrible|amazing|incredible|horrific|devastating|mind-blowing)\b',
         'absolutist_terms': r'\b(always|never|everyone|nobody|all|none|every single|absolutely)\b',
@@ -105,25 +119,43 @@ def analyze_propaganda(content: str) -> Dict:
         'conspiracy_terms': r'\b(conspiracy|cover-up|secret agenda|hidden truth|real story|what they don\'t want you to know)\b'
     }
 
-    # Count matches for each indicator
-    matches = {}
-    total_indicators = 0
-    logger.debug("Starting propaganda analysis")
-    logger.debug(f"Content length for analysis: {len(content)}")
+    text_content = content['text']
 
-    # Pattern-based analysis
+    # Store detailed matches with context
+    detailed_matches = {}
+    total_indicators = 0
+
+    logger.debug("Starting detailed propaganda analysis")
+    logger.debug(f"Content length for analysis: {len(text_content)}")
+
+    # Pattern-based analysis with context
     for indicator_type, pattern in propaganda_indicators.items():
-        matches[indicator_type] = len(re.findall(pattern, content.lower()))
-        total_indicators += matches[indicator_type]
-        logger.debug(f"Indicator {indicator_type}: {matches[indicator_type]} matches")
+        matches = list(re.finditer(pattern, text_content.lower()))
+        total_indicators += len(matches)
+
+        if matches:
+            detailed_matches[indicator_type] = []
+            for match in matches:
+                # Get surrounding context (50 characters before and after)
+                start = max(0, match.start() - 50)
+                end = min(len(text_content), match.end() + 50)
+                context = text_content[start:end]
+
+                detailed_matches[indicator_type].append({
+                    "matched_text": match.group(),
+                    "context": f"...{context}...",
+                    "position": match.start()
+                })
+
+        logger.debug(f"Indicator {indicator_type}: {len(matches)} matches")
 
     # Calculate base propaganda score
-    words = len(content.split())
+    words = len(text_content.split())
     indicator_density = (total_indicators / words) * 100 if words > 0 else 0
     pattern_score = min(int(indicator_density * 20), 100)  # Scale and cap at 100
 
     # Get AI analysis if available
-    ai_analysis = analyze_with_gemini(content)
+    ai_analysis = analyze_with_gemini(text_content)
     final_score = pattern_score
 
     if ai_analysis:
@@ -144,23 +176,35 @@ def analyze_propaganda(content: str) -> Dict:
     logger.debug(f"Final propaganda score: {final_score}")
 
     # Generate comprehensive analysis
-    detected_indicators = [k for k, v in matches.items() if v > 0]
+    detected_indicators = list(detailed_matches.keys())
     if additional_analysis:
         detected_indicators.extend(additional_analysis)
 
-    if final_score < 30:
-        analysis = "This article appears to be factual and well-balanced. The reporting is objective and supported by verifiable sources."
-        correction = ai_correction if ai_correction else None
-    elif final_score < 70:
-        analysis = f"This article shows some signs of potential bias. Found indicators: {', '.join(detected_indicators)}."
-        correction = ai_correction if ai_correction else "Consider consulting multiple sources for a more balanced perspective on this topic."
-    else:
-        analysis = f"High likelihood of biased content. Multiple propaganda indicators detected: {', '.join(detected_indicators)}."
-        correction = ai_correction if ai_correction else "For accurate information on this topic, please consult established fact-checking websites and verified news sources."
-
-    return {
+    # Create detailed response
+    response = {
+        "metadata": {
+            "title": content.get('title', ''),
+            "author": content.get('author', ''),
+            "date": content.get('date', ''),
+            "source": content.get('source', ''),
+            "word_count": words
+        },
         "propaganda_score": final_score,
-        "analysis": analysis,
-        "correction": correction,
-        "detected_techniques": detected_indicators
+        "detailed_matches": detailed_matches,
+        "detected_techniques": detected_indicators,
+        "analysis": "",
+        "correction": None
     }
+
+    # Add appropriate analysis and correction based on score
+    if final_score < 30:
+        response["analysis"] = "This article appears to be factual and well-balanced. The reporting is objective and supported by verifiable sources."
+        response["correction"] = ai_correction if ai_correction else None
+    elif final_score < 70:
+        response["analysis"] = f"This article shows some signs of potential bias. Found {len(detected_indicators)} different types of propaganda techniques."
+        response["correction"] = ai_correction if ai_correction else "Consider consulting multiple sources for a more balanced perspective on this topic."
+    else:
+        response["analysis"] = f"High likelihood of biased content. Found {len(detected_indicators)} different propaganda techniques with {total_indicators} total instances."
+        response["correction"] = ai_correction if ai_correction else "For accurate information on this topic, please consult established fact-checking websites and verified news sources."
+
+    return response
