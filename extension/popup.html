@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>News Propaganda Detector</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container p-3">
+        <h4 class="mb-3">News Propaganda Detector</h4>
+        
+        <div id="initial-state">
+            <button id="analyze-btn" class="btn btn-primary mb-3">
+                Analyze Current Article
+            </button>
+        </div>
+
+        <div id="loading-state" class="d-none">
+            <div class="d-flex justify-content-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <p class="text-center mt-2">Analyzing article...</p>
+        </div>
+
+        <div id="result-state" class="d-none">
+            <div class="mb-3">
+                <label class="form-label">Propaganda Score:</label>
+                <div class="progress">
+                    <div id="propaganda-score" class="progress-bar" role="progressbar"></div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Analysis:</label>
+                <div id="analysis-result" class="alert alert-info"></div>
+            </div>
+
+            <div id="correction-section" class="mb-3 d-none">
+                <label class="form-label">Factual Information:</label>
+                <div id="correction-text" class="alert alert-success"></div>
+            </div>
+
+            <button id="analyze-new" class="btn btn-secondary">
+                Analyze Another Article
+            </button>
+        </div>
+
+        <div id="error-state" class="d-none">
+            <div class="alert alert-danger" id="error-message"></div>
+            <button id="error-retry" class="btn btn-secondary">
+                Try Again
+            </button>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>

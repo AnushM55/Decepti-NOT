@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "News Propaganda Detector",
+  "version": "1.0",
+  "description": "Detects propaganda in news articles using AI analysis",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
