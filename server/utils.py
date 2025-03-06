@@ -66,20 +66,36 @@ def analyze_with_gemini(content: str) -> Dict:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-pro')
 
-        # Prompt for propaganda analysis
-        prompt = f"""Analyze the following text for propaganda techniques and biases. 
-        Consider factors like emotional manipulation, logical fallacies, and misleading statements.
-        Text: {content}
+        # Enhanced prompt for more specific propaganda analysis
+        prompt = f"""Analyze the following text for propaganda and bias. For each point, provide specific examples from the text.
 
-        Provide a response in the following JSON format:
+        Text to analyze: {content}
+
+        Please provide your analysis in the following JSON format:
         {{
-            "propaganda_likelihood": <number between 0-100>,
-            "detected_techniques": [<list of identified propaganda techniques>],
-            "overall_analysis": "<detailed analysis>",
-            "suggested_corrections": "<suggestions for more balanced reporting>"
+            "propaganda_likelihood": <score from 0-100, where 100 is highly propagandistic>,
+            "detected_techniques": [
+                {{
+                    "technique": "<name of propaganda technique>",
+                    "example": "<specific quote from text>",
+                    "explanation": "<why this is propagandistic>"
+                }}
+            ],
+            "overall_analysis": "<comprehensive analysis of bias and manipulation>",
+            "suggested_corrections": "<specific suggestions to make the text more balanced>"
         }}
 
-        Ensure the response is valid JSON."""
+        Focus on identifying:
+        1. Emotional manipulation
+        2. Logical fallacies
+        3. Misleading statements
+        4. Loaded language
+        5. False equivalencies
+        6. Oversimplification of complex issues
+        7. Appeal to fear or anger
+        8. Unsupported claims
+
+        Return ONLY valid JSON, no additional text."""
 
         # Generate response
         response = model.generate_content(prompt)
@@ -87,7 +103,9 @@ def analyze_with_gemini(content: str) -> Dict:
         # Parse the response
         if response.text:
             try:
-                return json.loads(response.text)
+                result = json.loads(response.text)
+                logger.debug(f"Gemini analysis result: {result}")
+                return result
             except json.JSONDecodeError:
                 logger.error("Failed to parse Gemini response as JSON")
                 return None
