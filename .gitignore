@@ -2,3 +2,4 @@
 .venv
 .env 
 *.zip
+__pycache__
