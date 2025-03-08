@@ -2,3 +2,5 @@
 .venv
 .env 
 *.txt
+*.zip
+pyenv.cfg
