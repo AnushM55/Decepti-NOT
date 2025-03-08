@@ -2,7 +2,9 @@
 .venv
 .env 
 *.zip
-*.txt
 include/
 lib/
 uv.lock
+replit.nix
+.replit
+lib64/
