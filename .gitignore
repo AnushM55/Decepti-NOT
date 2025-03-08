@@ -2,4 +2,4 @@
 .venv
 .env 
 *.zip
-__pycache__
+*.txt
