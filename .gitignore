@@ -3,4 +3,3 @@
 .env 
 *.txt
 *.zip
-pyenv.cfg
