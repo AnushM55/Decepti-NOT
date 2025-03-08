@@ -65,7 +65,7 @@ def analyze_with_gemini(content: str) -> Optional[Dict]:
         # list_available_models()
         
         # Use the correct model name from your available models
-        model = genai.GenerativeModel('gemini-1.5-pro-latest')  # UPDATED MODEL NAME
+        model = genai.GenerativeModel('gemini-2.0-flash')  # UPDATED MODEL NAME
         
         prompt = """
         Analyze the text for propaganda and bias. For each point, provide specific examples.
