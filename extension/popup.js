@@ -33,6 +33,14 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = '';
         
         techniques.forEach(tech => {
+            if( tech !== undefined){
+                if(tech.name === undefined){
+
+            const techDiv = document.createElement('div');
+            techDiv.className = 'technique-card';
+            techDiv.innerHTML = `<h1>${tech}</h1>`
+                }else{
+
             const techDiv = document.createElement('div');
             techDiv.className = 'technique-card';
             techDiv.innerHTML = `
@@ -41,6 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p>${tech.explanation}</p>
             `;
             container.appendChild(techDiv);
+            } 
+                }
         });
     }
 
@@ -85,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const content = response.result;
 
-            const analysisResponse = await fetch('http://localhost:5000/analyze', {
+            const analysisResponse = await fetch('https://newproject-production-4c15.up.railway.app/analyze', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({url: tab.url, content})
@@ -98,18 +108,28 @@ document.addEventListener('DOMContentLoaded', function() {
             updateScore(result.propaganda_score);
             
             // Populate corrections
+            const resultState = document.getElementById('result-state');
             const correctionSection = document.getElementById('correction-section');
             const correctionList = document.getElementById('correction-list');
             correctionList.innerHTML = '';
-            if (result.correction?.length) {
+            if (result.correction?.length > 0) {
+                resultState.classList.remove('d-none');
                 result.correction.forEach(item => {
+                    console.log(item)
                     const li = document.createElement('li');
-                    li.textContent = item;
+                    if (item.suggestion !== undefined && item.example !== undefined){
+                    li.innerHTML = `
+                    <p>${(item.suggestion!== undefined)?item.suggestion:""}</p>
+                    <p>${(item.example !== undefined)?item.example:""}</p>`
+                    }else{
+                        li.textContent = `${item}`
+                    }
                     correctionList.appendChild(li);
                 });
                 correctionSection.classList.remove('d-none');
             } else {
                 correctionSection.classList.add('d-none');
+                resultState.classList.add('d-none');
             }
 
             // Populate techniques
