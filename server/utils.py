@@ -3,226 +3,221 @@ from typing import Dict, Optional
 import logging
 import json
 import os
+import re
 import google.generativeai as genai
 from datetime import datetime
-
+import json_repair 
 logger = logging.getLogger(__name__)
 
 def extract_article_content(url: str, content: str) -> Optional[Dict]:
-    """
-    Extract clean article content using trafilatura with enhanced metadata
-    """
+    """Extract and clean article content with metadata using trafilatura."""
     try:
-        # First try using the provided content directly
-        logger.debug("Attempting to extract content directly from provided text")
-        if content and len(content.strip()) > 0:  # Basic check for non-empty content
+        # Direct content handling
+        if content and (clean_content := content.strip()):
             logger.debug("Using provided content directly")
             return {
-                "text": content.strip(),
+                "text": clean_content,
                 "source": "direct_input",
-                "length": len(content.strip())
+                "length": len(clean_content)
             }
 
-        # If no direct content, try URL-based extraction
-        logger.debug(f"No direct content, attempting to extract from URL: {url}")
-        downloaded = trafilatura.fetch_url(url)
-        if downloaded:
-            extracted = trafilatura.extract(downloaded, include_formatting=True, include_links=True, 
-                                         include_images=True, include_tables=True, 
-                                         output_format='json')
+        # URL-based extraction
+        logger.debug(f"Attempting URL extraction: {url}")
+        if downloaded := trafilatura.fetch_url(url):
+            extracted = trafilatura.extract(
+                downloaded,
+                include_formatting=True,
+                include_links=True,
+                include_images=True,
+                include_tables=True,
+                output_format='json'
+            )
+            
             if extracted:
-                extracted_dict = json.loads(extracted)
-                logger.debug("Successfully extracted content from URL")
-                logger.debug(f"Extracted content length: {len(extracted_dict.get('text', ''))}")
+                data = json.loads(extracted)
+                logger.debug(f"Successful extraction - Length: {len(data.get('text', ''))}")
                 return {
-                    "text": extracted_dict.get('text', ''),
-                    "title": extracted_dict.get('title', ''),
-                    "author": extracted_dict.get('author', ''),
-                    "date": extracted_dict.get('date', ''),
+                    "text": data.get('text', ''),
+                    "title": data.get('title', ''),
+                    "author": data.get('author', ''),
+                    "date": data.get('date', ''),
                     "source": url,
-                    "length": len(extracted_dict.get('text', ''))
+                    "length": len(data.get('text', ''))
                 }
-            else:
-                logger.error("Failed to extract content from downloaded HTML")
-        else:
-            logger.error(f"Failed to download content from URL: {url}")
-
+        
+        logger.error(f"Extraction failed for URL: {url}")
         return None
+
     except Exception as e:
-        logger.error(f"Error extracting content: {str(e)}", exc_info=True)
+        logger.error(f"Extraction error: {str(e)}", exc_info=True)
         return None
 
-def analyze_with_gemini(content: str) -> Dict:
-    """
-    Analyze content using Google's Gemini Pro API for sophisticated propaganda detection
-    """
+def analyze_with_gemini(content: str) -> Optional[Dict]:
+    """Analyze content for propaganda using Google Gemini Pro API."""
+    if not (api_key := os.environ.get("GEMINI_API_KEY")):
+        logger.warning("Missing Gemini API key - skipping analysis")
+        return None
+
     try:
-        GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-        if not GEMINI_API_KEY:
-            logger.warning("Gemini API key not found, skipping AI analysis")
-            return None
+        genai.configure(api_key=api_key)
+        
+        # List models to verify availability (uncomment to check)
+        # list_available_models()
+        
+        # Use the correct model name from your available models
+        model = genai.GenerativeModel('gemini-1.5-pro-latest')  # UPDATED MODEL NAME
+        
+        prompt = """
+        Analyze the text for propaganda and bias. For each point, provide specific examples.
 
-        # Configure the Gemini API
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-pro')
+        Text: {content}
 
-        # Enhanced prompt for more specific propaganda analysis
-        prompt = f"""Analyze the following text for propaganda and bias. For each point, provide specific examples from the text.
+        Return JSON with:
+        - propaganda_likelihood (0-100)
+        - detected_techniques (name, example, explanation)
+        - overall_analysis
+        - suggested_corrections
 
-        Text to analyze: {content}
-
-        Please provide your analysis in the following JSON format:
-        {{
-            "propaganda_likelihood": <score from 0-100, where 100 is highly propagandistic>,
-            "detected_techniques": [
-                {{
-                    "technique": "<name of propaganda technique>",
-                    "example": "<specific quote from text>",
-                    "explanation": "<why this is propagandistic>"
-                }}
-            ],
-            "overall_analysis": "<comprehensive analysis of bias and manipulation>",
-            "suggested_corrections": "<specific suggestions to make the text more balanced>"
-        }}
-
-        Focus on identifying:
+        Focus on:
         1. Emotional manipulation
         2. Logical fallacies
         3. Misleading statements
         4. Loaded language
         5. False equivalencies
-        6. Oversimplification of complex issues
-        7. Appeal to fear or anger
+        6. Oversimplification
+        7. Fear/anger appeal
         8. Unsupported claims
 
-        Return ONLY valid JSON, no additional text."""
+        PROVIDE ONLY VALID JSON RESPONSE (including valid json formatting tags for special characters.
+        """.replace("{content}", content)
 
-        # Generate response
         response = model.generate_content(prompt)
-
-        # Parse the response
-        if response.text:
-            try:
-                result = json.loads(response.text)
-                logger.debug(f"Gemini analysis result: {result}")
-                return result
-            except json.JSONDecodeError:
-                logger.error("Failed to parse Gemini response as JSON")
-                return None
+        
+        if response and response.candidates:
+            content = response.candidates[0].content.parts[0].text
+            #return json.loads(content[content.find('\n')+1:content.rfind('\n')])
+            return json_repair.loads(content)
         else:
-            logger.error("Empty response from Gemini API")
+            logger.error("Empty or invalid response from Gemini API")
             return None
 
     except Exception as e:
-        logger.error(f"Error in Gemini analysis: {str(e)}", exc_info=True)
+        logger.error(f"Gemini analysis failed: {str(e)}", exc_info=True)
         return None
 
-def analyze_propaganda(content: Dict) -> Dict:
-    """
-    Enhanced propaganda analysis with detailed pattern locations and context
-    """
-    import re
+"""Analyze content for propaganda using Google Gemini Pro API.
+def analyze_with_gemini(content: str) -> Optional[Dict]:
+    if not (api_key := os.environ.get("GEMINI_API_KEY")):
+        logger.warning("Missing Gemini API key - skipping analysis")
+        return None
 
-    # Expanded propaganda indicators with more sophisticated patterns remain unchanged
-    propaganda_indicators = {
-        'emotional_language': r'\b(shocking|outrageous|terrible|amazing|incredible|horrific|devastating|mind-blowing)\b',
-        'absolutist_terms': r'\b(always|never|everyone|nobody|all|none|every single|absolutely)\b',
-        'unverified_claims': r'\b(sources say|reportedly|allegedly|claims|according to some|many believe|experts suggest)\b',
-        'loaded_words': r'\b(regime|puppet|radical|extremist|terrorist|freedom fighter|patriot|traitor)\b',
-        'fear_mongering': r'\b(crisis|catastrophe|disaster|threat|danger|emergency|chaos|collapse)\b',
-        'oversimplification': r'\b(simply|obviously|clearly|undoubtedly|without question|naturally)\b',
-        'ad_hominem': r'\b(stupid|ignorant|foolish|incompetent|corrupt|evil|wicked)\b',
-        'bandwagon': r'\b(everyone knows|popular opinion|majority believes|trending|viral|mainstream)\b',
-        'false_dichotomy': r'\b(either|or|versus|vs\.|against|choose between)\b',
-        'conspiracy_terms': r'\b(conspiracy|cover-up|secret agenda|hidden truth|real story|what they don\'t want you to know)\b'
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-pro')
+        
+        prompt = """
+"""
+        Analyze the text for propaganda and bias. For each point, provide specific examples.
+
+        Text: {content}
+
+        Return JSON with:
+        - propaganda_likelihood (0-100)
+        - detected_techniques (name, example, explanation)
+        - overall_analysis
+        - suggested_corrections
+
+        Focus on:
+        1. Emotional manipulation
+        2. Logical fallacies
+        3. Misleading statements
+        4. Loaded language
+        5. False equivalencies
+        6. Oversimplification
+        7. Fear/anger appeal
+        8. Unsupported claims
+
+        ONLY VALID JSON RESPONSE.
+""" """.replace("{content}", content)
+
+        response = model.generate_content(prompt).text
+        return json.loads(response) if response else None
+
+    except Exception as e:
+        logger.error(f"Gemini analysis failed in analyze_with_gemini : {str(e)}", exc_info=True)
+        return None
+"""
+def analyze_propaganda(content: Dict) -> Dict:
+    """Perform propaganda analysis using pattern matching and AI insights."""
+    PROPAGANDA_PATTERNS = {
+        'emotional_language': r'\b(shocking|outrageous|terrible|amazing)\b',
+        'absolutist_terms': r'\b(always|never|everyone|nobody)\b',
+        'unverified_claims': r'\b(sources say|reportedly|allegedly)\b',
+        'loaded_words': r'\b(regime|puppet|radical|extremist)\b',
+        'fear_mongering': r'\b(crisis|catastrophe|disaster)\b',
+        'oversimplification': r'\b(simply|obviously|clearly)\b',
+        'ad_hominem': r'\b(stupid|ignorant|foolish)\b',
+        'bandwagon': r'\b(everyone knows|popular opinion)\b',
+        'false_dichotomy': r'\b(either|or|versus|vs\.)\b',
+        'conspiracy_terms': r'\b(conspiracy|cover-up)\b'
     }
 
-    text_content = content['text']
-
-    # Store detailed matches with context
-    detailed_matches = {}
-    total_indicators = 0
-
-    logger.debug("Starting detailed propaganda analysis")
-    logger.debug(f"Content length for analysis: {len(text_content)}")
-
-    # Pattern-based analysis with context
-    for indicator_type, pattern in propaganda_indicators.items():
-        matches = list(re.finditer(pattern, text_content.lower()))
-        total_indicators += len(matches)
-
-        if matches:
-            detailed_matches[indicator_type] = []
-            for match in matches:
-                # Get surrounding context (50 characters before and after)
-                start = max(0, match.start() - 50)
-                end = min(len(text_content), match.end() + 50)
-                context = text_content[start:end]
-
-                detailed_matches[indicator_type].append({
-                    "matched_text": match.group(),
-                    "context": f"...{context}...",
-                    "position": match.start()
-                })
-
-        logger.debug(f"Indicator {indicator_type}: {len(matches)} matches")
-
-    # Calculate base propaganda score
-    words = len(text_content.split())
-    indicator_density = (total_indicators / words) * 100 if words > 0 else 0
-    pattern_score = min(int(indicator_density * 20), 100)  # Scale and cap at 100
-
-    # Get AI analysis if available
-    ai_analysis = analyze_with_gemini(text_content)
-    final_score = pattern_score
-
-    if ai_analysis:
-        try:
-            # Combine both scores with AI analysis weighted more heavily
-            final_score = int((pattern_score * 0.4) + (ai_analysis.get('propaganda_likelihood', pattern_score) * 0.6))
-            additional_analysis = ai_analysis.get('detected_techniques', [])
-            ai_correction = ai_analysis.get('suggested_corrections', None)
-        except (AttributeError, TypeError):
-            logger.error("Failed to process AI analysis result")
-            additional_analysis = []
-            ai_correction = None
-    else:
-        additional_analysis = []
-        ai_correction = None
-
-    logger.debug(f"Words: {words}, Total indicators: {total_indicators}")
-    logger.debug(f"Final propaganda score: {final_score}")
-
-    # Generate comprehensive analysis
-    detected_indicators = list(detailed_matches.keys())
-    if additional_analysis:
-        detected_indicators.extend(additional_analysis)
-
-    # Create detailed response
-    response = {
+    text = content['text']
+    analysis = {
         "metadata": {
             "title": content.get('title', ''),
             "author": content.get('author', ''),
             "date": content.get('date', ''),
             "source": content.get('source', ''),
-            "word_count": words
+            "word_count": len(text.split())
         },
-        "propaganda_score": final_score,
-        "detailed_matches": detailed_matches,
-        "detected_techniques": detected_indicators,
+        "propaganda_score": 0,
+        "detailed_matches": {},
+        "detected_techniques": [],
         "analysis": "",
         "correction": None
     }
 
-    # Add appropriate analysis and correction based on score
-    if final_score < 30:
-        response["analysis"] = "This article appears to be factual and well-balanced. The reporting is objective and supported by verifiable sources."
-        response["correction"] = ai_correction if ai_correction else None
-    elif final_score < 70:
-        response["analysis"] = f"This article shows some signs of potential bias. Found {len(detected_indicators)} different types of propaganda techniques."
-        response["correction"] = ai_correction if ai_correction else "Consider consulting multiple sources for a more balanced perspective on this topic."
-    else:
-        response["analysis"] = f"High likelihood of biased content. Found {len(detected_indicators)} different propaganda techniques with {total_indicators} total instances."
-        response["correction"] = ai_correction if ai_correction else "For accurate information on this topic, please consult established fact-checking websites and verified news sources."
+    # Pattern-based analysis
+    total_matches = 0
+    for pattern_name, regex in PROPAGANDA_PATTERNS.items():
+        matches = list(re.finditer(regex, text.lower()))
+        total_matches += len(matches)
+        
+        if matches:
+            analysis['detailed_matches'][pattern_name] = [
+                {
+                    "match": m.group(),
+                    "context": f"...{text[max(0, m.start()-50):m.end()+50]}...",
+                    "position": m.start()
+                } for m in matches
+            ]
 
-    return response
+    # Score calculation
+    word_count = analysis['metadata']['word_count']
+    pattern_score = min(int((total_matches / word_count) * 2000), 100) if word_count else 0
+
+    # AI analysis integration
+    ai_result = analyze_with_gemini(text)
+    ai_score = ai_result.get('propaganda_likelihood', 0) if ai_result else 0
+    final_score = int(pattern_score * 0.4 + ai_score * 0.6) if ai_result else pattern_score
+
+    # Generate response
+    analysis.update({
+        "propaganda_score": final_score,
+        "detected_techniques": list(analysis['detailed_matches'].keys()) + 
+                             (ai_result.get('detected_techniques', []) if ai_result else []),
+        "analysis": get_analysis_summary(final_score, total_matches, len(analysis['detailed_matches'])),
+        "correction": ai_result.get('suggested_corrections', "No suggestions available") if ai_result else None
+    })
+
+    return analysis
+
+def get_analysis_summary(score: int, total_matches: int, technique_count: int) -> str:
+    """Generate analysis summary based on propaganda score."""
+    if score < 30:
+        return "Factual and well-balanced content with minimal bias indicators."
+    elif score < 70:
+        return f"Moderate bias potential ({technique_count} techniques, {total_matches} matches)."
+    else:
+        return f"High propaganda likelihood ({technique_count} techniques, {total_matches} matches)."
