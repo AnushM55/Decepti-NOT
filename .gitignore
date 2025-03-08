@@ -3,7 +3,6 @@
 .env 
 *.zip
 *.txt
-include/*
+include/
 lib/
-lib64/
 uv.lock
