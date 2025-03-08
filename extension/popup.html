@@ -38,10 +38,19 @@
                 <div id="analysis-result" class="alert alert-info"></div>
             </div>
 
-            <div id="correction-section" class="mb-3 d-none">
-                <label class="form-label">Factual Information:</label>
-                <div id="correction-text" class="alert alert-success"></div>
-            </div>
+            <!-- Inside your result state container -->
+<div id="result-state" class="d-none">
+    <!-- Existing elements -->
+    
+    <!-- Add these new sections -->
+    <div id="detected-techniques" class="mt-3"></div>
+    <div id="detailed-matches" class="mt-3"></div>
+    
+    <div id="correction-section" class="mt-3 d-none">
+      <h4>Recommended Corrections:</h4>
+      <ul id="correction-list"></ul>
+    </div>
+  </div>
 
             <button id="analyze-new" class="btn btn-secondary">
                 Analyze Another Article

@@ -28,14 +28,53 @@ document.addEventListener('DOMContentLoaded', function() {
         progressBar.textContent = `${score}%`;
     }
 
+    function populateTechniques(techniques) {
+        const container = document.getElementById('detected-techniques');
+        container.innerHTML = '';
+        
+        techniques.forEach(tech => {
+            const techDiv = document.createElement('div');
+            techDiv.className = 'technique-card';
+            techDiv.innerHTML = `
+                <h5>${tech.name}</h5>
+                <p><strong>Example:</strong> ${tech.example}</p>
+                <p>${tech.explanation}</p>
+            `;
+            container.appendChild(techDiv);
+        });
+    }
+
+    function populateMatches(matches) {
+        const container = document.getElementById('detailed-matches');
+        container.innerHTML = '';
+        
+        Object.entries(matches).forEach(([type, entries]) => {
+            const section = document.createElement('div');
+            section.className = 'match-section';
+            section.innerHTML = `<h5>${type.replace(/_/g, ' ')}</h5>`;
+            
+            const list = document.createElement('ul');
+            entries.forEach(entry => {
+                list.innerHTML += `
+                    <li>
+                        <p><strong>Match:</strong> ${entry.match}</p>
+                        <p><strong>Context:</strong> ...${entry.context}...</p>
+                        <p><small>Position: ${entry.position}</small></p>
+                    </li>
+                `;
+            });
+            
+            section.appendChild(list);
+            container.appendChild(section);
+        });
+    }
+
     async function analyzeCurrentPage() {
         try {
             showState('loading');
 
-            // Get current tab
             const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
 
-            // Extract content from the page
             const [response] = await chrome.scripting.executeScript({
                 target: {tabId: tab.id},
                 function: () => {
@@ -46,40 +85,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const content = response.result;
 
-            // Send to backend for analysis
             const analysisResponse = await fetch('http://localhost:5000/analyze', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    url: tab.url,
-                    content: content
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url: tab.url, content})
             });
 
-            if (!analysisResponse.ok) {
-                throw new Error('Analysis failed');
-            }
 
             const result = await analysisResponse.json();
 
-            // Update UI with results
             document.getElementById('analysis-result').textContent = result.analysis;
             updateScore(result.propaganda_score);
-
-            if (result.correction) {
-                document.getElementById('correction-section').classList.remove('d-none');
-                document.getElementById('correction-text').textContent = result.correction;
+            
+            // Populate corrections
+            const correctionSection = document.getElementById('correction-section');
+            const correctionList = document.getElementById('correction-list');
+            correctionList.innerHTML = '';
+            if (result.correction?.length) {
+                result.correction.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    correctionList.appendChild(li);
+                });
+                correctionSection.classList.remove('d-none');
             } else {
-                document.getElementById('correction-section').classList.add('d-none');
+                correctionSection.classList.add('d-none');
             }
+
+            // Populate techniques
+            populateTechniques(result.detected_techniques);
+            
+            // Populate matches
+            populateMatches(result.detailed_matches);
 
             showState('result');
 
         } catch (error) {
             document.getElementById('error-message').textContent = 
                 'Failed to analyze article. Please check if the backend server is running.';
+            console.log(error)
             showState('error');
         }
     }
