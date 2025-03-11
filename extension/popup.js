@@ -107,31 +107,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('analysis-result').textContent = result.analysis;
             updateScore(result.propaganda_score);
             
-            // Populate corrections
-            const resultState = document.getElementById('result-state');
-            const correctionSection = document.getElementById('correction-section');
-            const correctionList = document.getElementById('correction-list');
-            correctionList.innerHTML = '';
-            if (result.correction?.length > 0) {
-                resultState.classList.remove('d-none');
-                result.correction.forEach(item => {
-                    console.log(item)
-                    const li = document.createElement('li');
-                    if (item.suggestion !== undefined && item.example !== undefined){
-                    li.innerHTML = `
-                    <p>${(item.suggestion!== undefined)?item.suggestion:""}</p>
-                    <p>${(item.example !== undefined)?item.example:""}</p>`
-                    }else{
-                        li.textContent = `${item}`
-                    }
-                    correctionList.appendChild(li);
-                });
-                correctionSection.classList.remove('d-none');
-            } else {
-                correctionSection.classList.add('d-none');
-                resultState.classList.add('d-none');
-            }
-
             // Populate techniques
             populateTechniques(result.detected_techniques);
             

@@ -5,6 +5,6 @@
 include/
 lib/
 uv.lock
-replit.nix
-.replit
+./replit.nix
+./.replit
 lib64/
