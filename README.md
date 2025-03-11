@@ -28,7 +28,13 @@ Prerequisites : Chrome browser
 2. run `pip install -r requirements.txt` 
 3. run `python main.py`
 4. The API can be accessed at `http://localhost:5000`
-      
+   
 
+
+
+## Demo :
+
+
+https://github.com/user-attachments/assets/1b4a1dec-6a6d-4ccb-8116-5d3334f85c61
 
 
